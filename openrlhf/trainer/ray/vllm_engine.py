@@ -9,9 +9,10 @@ from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 from vllm import LLM
 
 from openrlhf.utils.logging_utils import init_logger
+from openrlhf.utils import PythonExecutor,excute_codes
 
 from .utils import ray_noset_visible_devices
-
+import copy
 logger = init_logger(__name__)
 
 
@@ -86,13 +87,13 @@ class LLMRayActor:
             for actor_rank, request in self.requests.items():
                 num_requests.append((actor_rank, len(request)))
                 requests.extend(request)
-
             if len(requests) > 0:
                 # For now we assume that all requests have the same sampling params
-                responses = self.llm.generate(requests, sampling_params=sampling_params)
+                # responses = self.llm.generate(requests, sampling_params=sampling_params)
+                responses=self.generate_code_exec(request, sampling_params)
             else:
                 responses = []
-
+            
             offset = 0
             self.responses = {}
             for actor_rank, num in num_requests:
@@ -107,6 +108,118 @@ class LLMRayActor:
         Return the responses for the actor with the given rank
         """
         return self.response_queues[actor_rank].get()
+    def generate_code_exec(self, request, sampling_params):
+        """
+        Generate a response for the given request
+        """
+        executor = PythonExecutor()
+        responses=self.llm.generate(request, sampling_params=sampling_params)
+        final_responses = []
+        final_code_num_lst = []
+        response_idx = 0
+        for response, prompt in zip(responses, request): #针对多个prompt
+            response_idx += 1
+            code_num_lst = [0 for _ in range(len(response.outputs))]
+            intermediate_responses = [prompt for _ in range(len(response.outputs))]
+            fini_responses = []
+            pred_stop_reason_lst = [
+                [output.text, output.stop_reason, output.token_ids] for output in response.outputs
+            ]
+            inter_responses_tmp = response
+            first_time = True # 确保必进入一次
+            while first_time or any(
+                [
+                    pred_stop_reason is not None
+                    for pred_stop_reason in pred_stop_reason_lst
+                ]
+            ):  #每个prompt可能会因为num_return_sequences等出现一个prompt多个response，这样response.ouputs长度>1的list
+                first_time = False
+                code_to_execute_lst = []
+                assert len(pred_stop_reason_lst) == len(intermediate_responses)
+                for res_idx in range(len(pred_stop_reason_lst)):
+                    pred_stop_reason = pred_stop_reason_lst[res_idx]
+                    inter_response = intermediate_responses[res_idx]
+                    if inter_response is None:
+                        continue
+                    pred, stop_reason = pred_stop_reason[:2]
+                    if stop_reason != "</code>":
+                        inter_response["prompt"] = inter_response["prompt"] + pred
+                        #TODO fini_response需要修改
+                        # import pdb;pdb.set_trace()
+                        if inter_responses_tmp.outputs[0].text != pred: # 第一次不做处理
+                            tmp_text = inter_responses_tmp.outputs[0].text + pred
+                            inter_responses_tmp.outputs[0].text = tmp_text
+                            inter_responses_tmp.outputs[0].token_ids = self.llm.get_tokenizer().encode(tmp_text)
+
+                        # fini_responses.append(inter_response)
+                        fini_responses.append(inter_responses_tmp)
+                        pred_stop_reason_lst[res_idx] = None
+                        intermediate_responses[res_idx] = None
+                        continue
+                    else:
+                        code_to_execute_lst.append(pred.replace("</code>","").split("```python")[-1].replace("```", "").strip())
+                        inter_response["prompt"] = inter_response["prompt"] + pred
+                        intermediate_responses[res_idx] = inter_response
+
+                new_intermediate_responses = None
+                if len(code_to_execute_lst) == 0:
+                    break
+                batch_results, no_code_idx = excute_codes(
+                    code_to_execute_lst, executor=executor
+                )
+                batch_results_include_none = []
+                for i in range(len(code_to_execute_lst)):
+                    if i in no_code_idx:
+                        batch_results_include_none.append(None)
+                    else:
+                        batch_results_include_none.append(batch_results.pop(0))
+                for i, inter_response in enumerate(intermediate_responses):
+                    if inter_response is None:
+                        continue
+                    exe_result = batch_results_include_none.pop(0)
+                    if exe_result is None:
+                        excu_content = "None"
+                    else:
+                        output, report = exe_result
+                        if report == "Done":
+                            excu_content = output
+                        else:
+                            excu_content = report
+                    inter_response["prompt"] = inter_response["prompt"] + "\n" + "<interpreter>\n" + excu_content + "</interpreter>\n\n"
+                    intermediate_responses[i] = inter_response
+                    tmp_text = inter_responses_tmp.outputs[0].text + "\n" + "<interpreter>\n" + excu_content + "</interpreter>\n\n"
+                    inter_responses_tmp.outputs[0].text = tmp_text
+                    inter_responses_tmp.outputs[0].token_ids = self.llm.get_tokenizer().encode(tmp_text)
+                    # intermediate_responses[i] += (
+                    #     "</code>\n" + "<interpreter>\n" + excu_content + "</interpreter>\n\n"
+                    # )
+                intermediate_responses_to_gen = [
+                    inter_response
+                    for inter_response in intermediate_responses
+                    if inter_response is not None
+                ]
+                tmp_sampling_params = copy.deepcopy(sampling_params)
+                # tmp_sampling_params["
+                new_intermediate_responses = self.llm.generate(
+                    intermediate_responses_to_gen, sampling_params=sampling_params
+                )
+                tmp_cnt = 0
+                for new_i, pred_stop_reason in enumerate(pred_stop_reason_lst):
+                    if pred_stop_reason is not None:
+                        tmp_output = new_intermediate_responses[tmp_cnt].outputs.pop(0)
+                        tmp_cnt += 1
+                        pred_stop_reason_lst[new_i] = [
+                            tmp_output.text,
+                            tmp_output.stop_reason,
+                            tmp_output.token_ids,
+                        ]
+                        code_num_lst[new_i] += 1
+            if len(fini_responses) == 1:
+                final_responses.append(fini_responses[-1])
+                final_code_num_lst.append(code_num_lst)
+            else:
+                final_responses.append(fini_responses)
+        return final_responses
 
 
 def create_vllm_engines(

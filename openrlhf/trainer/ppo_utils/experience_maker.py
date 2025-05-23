@@ -620,7 +620,6 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                 "actor_value_rm_time": 0,
                 "wait_time": 0,
             }
-
         experiences, accuracy_rewards_original = super().make_experience_list(
             all_prompts, all_labels, global_step, **generate_kwargs
         )
@@ -877,7 +876,10 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
             llms = self.vllm_engines[rank::world_size]
 
         args = self.strategy.args
-
+        
+        stop_words = []    
+        if args.exe_code:
+            stop_words.append("</code>")
         sampling_params = SamplingParams(
             temperature=kwargs.get("temperature", 1.0),
             top_p=kwargs.get("top_p", 1.0),
@@ -886,13 +888,13 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
             min_tokens=kwargs.get("min_new_tokens", 1),
             skip_special_tokens=kwargs.get("skip_special_tokens", False),
             include_stop_str_in_output=True,
+            stop=stop_words,
         )
 
         # Expand prompt list based on the number of samples per prompt
         all_prompts = sum([[prompt] * args.n_samples_per_prompt for prompt in all_prompts], [])
         batch_size = (len(all_prompts) + len(llms) - 1) // len(llms)
         all_labels = sum([[label] * args.n_samples_per_prompt for label in all_labels], [])
-
         # Distribute requests to engines and collect responses to outputs
         refs = []
         # For VLM

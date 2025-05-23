@@ -56,7 +56,9 @@ def blending_datasets(
         data_dir = dataset.split("@")[1].strip() if "@" in dataset else None
         dataset = dataset.split("@")[0].strip()
         dataset_basename = os.path.basename(dataset)
-
+        # import torch
+        # if torch.distributed.get_rank() == 0:
+        #     import pdb;pdb.set_trace()
         ext = os.path.splitext(dataset)[-1]
         # local python script
         if ext == ".py" or (

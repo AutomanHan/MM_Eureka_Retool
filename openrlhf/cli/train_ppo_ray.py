@@ -15,7 +15,7 @@ from openrlhf.trainer.ray import (
     create_vllm_engines,
 )
 from openrlhf.utils import get_strategy
-
+# ray.init(local_mode=True)
 
 # NOTE: reward function for multiple reward models, replace this with your own function!
 def reward_fn(rewards: List[torch.Tensor]):
@@ -438,6 +438,9 @@ if __name__ == "__main__":
     parser.add_argument("--use_dapo", action="store_true", default=False)
     parser.add_argument("--use_adora", action="store_true", default=False)
     parser.add_argument("--adora_lamda", type=float, default=0.1)
+
+    # retool parameters
+    parser.add_argument("--exe_code", action="store_true", default=False)
 
     args = parser.parse_args()
 
