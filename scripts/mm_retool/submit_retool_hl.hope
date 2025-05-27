@@ -1,0 +1,69 @@
+[base]
+type = ml-vision
+
+[resource]
+usergroup = hadoop-basecv
+#queue = root.hldy_training_cluster.hadoop-aipnlp.o_exp
+queue = root.hldy_training_cluster.hadoop-aipnlp.h800_eval_debug
+#queue = root.hldy_training_cluster.hadoop-aipnlp.p_exp
+#queue = root.hldy_training_cluster.hadoop-aipnlp.h800_mm_debug
+[roles]
+workers = 1
+worker.memory = 800000
+worker.vcore = 80
+worker.gcoresh800-80g = 8
+worker.ports = 1
+worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v0.sh
+#worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v00.sh
+#worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v1.sh
+
+
+[user_args]
+
+[am]
+afo.app.am.resource.mb = 4096
+
+[tensorboard]
+with.tensor.board = false
+
+[docker]
+#afo.docker.image.name = registryonline-hulk.sankuai.com/custom_prod/com.sankuai.phxmlp.mtjupyter.singleuser/hdp_training_cuda12.1.1_python39_mllm_moe_rm_te_27cd3c94
+#afo.docker.image.name = registryonline-hulk.sankuai.com/custom_prod/com.sankuai.phxmlp.mtjupyter.singleuser/hdp_training_cuda12.1.1_python39_mllm_moe_rm_te_1.0.0_167501f0
+#afo.docker.image.name = registry-offlinebiz.sankuai.com/custom_prod/com.sankuai.phxmlp.mtjupyter.singleuser/hdp-mlp_training_codelab_cuda12.2_python3.8_glibc2.28_v3_27ff7e33
+afo.docker.image.name = registry-offlinebiz.sankuai.com/custom_prod/com.sankuai.phxmlp.mtjupyter.singleuser/aipnlp_base_pytorch2.3.1_cuda12.4.0_python3.9_1_18_glibc_2.28_2532322d
+[data]
+afo.data.prefetch = false
+
+[failover]
+afo.app.support.engine.failover = true
+
+[conda]
+afo.conda.env.name = gxx6
+afo.conda.env.path = viewfs://hadoop-meituan/zw03mlnn01/user/conda/chenshaoxiang/conda_envs/gxx6.tar.gz
+afo.conda.store.type = hdfs
+
+[job_track]
+demand_id = 3012
+
+[others]
+afo.app.env.YARN_CONTAINER_RUNTIME_DOCKER_SHM_SIZE_BYTES = 400000000000
+afo.xm.notice.receivers.account = hancong11,qiuhaibo,guorongxin
+with_requirements = false
+afo.app.yarn.allocate.timeout.seconds = 14400000
+afo.role.worker.env.YARN_CONTAINER_RUNTIME_DOCKER_CEPH_ENABLE = false
+afo.role.worker.env.YARN_CONTAINER_RUNTIME_NOT_MOUNT_HOST_CEPH = true
+afo.dolphinfs.otherusers = hadoop-basecv,hadoop-basecv-hl,hadoop-hldy-nlp,hadoop-aipnlp,hadoop-hdp-hldy,hadoop-mvr-hl,hadoop-speech-storage,hadoop-speech-llm
+pc.use.dolphinfs.users = hadoop-basecv,hadoop-basecv-hl,hadoop-hldy-nlp,hadoop-aipnlp,hadoop-hdp-hldy,hadoop-mvr-hl,hadoop-speech-storage,hadoop-speech-llm
+afo.role.worker.env.INIT_SCRIPT_SSHD_ENABLED = true
+afo.role.worker.env.INIT_SCRIPT_SSHD_PROT = 22
+afo.role.worker.env.INIT_SCRIPT_SSHD_PASSWORD = abc123
+afo.role.worker.lease.time = 12h0m0s
+afo.app.env.HOPE_TRACKING_EXECUTOR_TYPE = process
+afo.app.env.HOPE_TRACKING_COLLECTOR_THREAD_INTV = 30
+afo.app.env.HOPE_TRACKING_SENDER_BATCH_INTV = 10
+
+#afo.app.name = 0423_p1_64x14_1_exp0_train_univit0.6b_moe3b_vs_ultra_200b_weighted@hancong11
+
+afo.use.hdfs.fuse = true
+afo.use.hdfs.readonly = true
+afo.use.hdfs.fuse.subpath = user:/mnt/hdfs/user,zw04mlnn01:/mnt/hdfs/zw04mlnn01

@@ -90,7 +90,10 @@ class LLMRayActor:
             if len(requests) > 0:
                 # For now we assume that all requests have the same sampling params
                 # responses = self.llm.generate(requests, sampling_params=sampling_params)
-                responses=self.generate_code_exec(request, sampling_params)
+                if len(sampling_params.stop)==0:
+                    responses = self.llm.generate(requests, sampling_params=sampling_params)
+                else:
+                    responses=self.generate_code_exec(request, sampling_params)
             else:
                 responses = []
             
@@ -189,7 +192,15 @@ class LLMRayActor:
                     intermediate_responses[i] = inter_response
                     tmp_text = inter_responses_tmp.outputs[0].text + "\n" + "<interpreter>\n" + excu_content + "</interpreter>\n\n"
                     inter_responses_tmp.outputs[0].text = tmp_text
-                    inter_responses_tmp.outputs[0].token_ids = self.llm.get_tokenizer().encode(tmp_text)
+                    tmp_token_ids = self.llm.get_tokenizer().encode(tmp_text)
+                    max_model_len_llm = self.llm.llm_engine.model_config.max_model_len
+                    inter_responses_tmp.outputs[0].token_ids = tmp_token_ids
+                    if len(tmp_token_ids) > max_model_len_llm:
+                        logger.info(f"text info: {tmp_text}, length {len(tmp_token_ids)}, max_model_len: {max_model_len_llm}")
+                        tmp_token_ids = tmp_token_ids[:max_model_len_llm]
+                        inter_responses_tmp.outputs[0].token_ids = tmp_token_ids
+                        tmp_text=self.llm.get_tokenizer().decode(tmp_token_ids)
+                        inter_responses_tmp.outputs[0].text = tmp_text
                     # intermediate_responses[i] += (
                     #     "</code>\n" + "<interpreter>\n" + excu_content + "</interpreter>\n\n"
                     # )
