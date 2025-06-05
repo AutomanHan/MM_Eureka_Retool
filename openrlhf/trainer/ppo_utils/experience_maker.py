@@ -232,7 +232,7 @@ class NaiveExperienceMaker(ABC):
             disable=not self.strategy.is_rank_0(),
         ):
             experiences.append(self.make_experience(samples).to_device("cpu"))
-
+        # import pdb;pdb.set_trace()
         accuracy_rewards_total = sum(e.info["accuracy_rewards"].sum() for e in experiences)
         accuracy_rewards_count = sum(e.info["accuracy_rewards"].numel() for e in experiences)
         accuracy_rewards_original = accuracy_rewards_total / accuracy_rewards_count
@@ -304,6 +304,7 @@ class NaiveExperienceMaker(ABC):
         all_prompts = sum([[prompt] * args.n_samples_per_prompt for prompt in all_prompts], [])
         all_labels = sum([[label] * args.n_samples_per_prompt for label in all_labels], [])
         samples_list = []
+        # import pdb;pdb.set_trace()
         for i in range(0, len(all_prompts), args.micro_rollout_batch_size):
             prompts = all_prompts[i : i + args.micro_rollout_batch_size]
 
@@ -962,11 +963,23 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
 
                     # concat input and output
                     sequences.append(input_ids + output_ids)
-
                 sequences = torch.tensor(sequences)
-                sequences, attention_mask, action_mask = self.actor.process_sequences(
-                    sequences, max_input_len, eos_token_id, pad_token_id
-                )
+
+                
+                start_interpreter = "<interpreter>"
+                end_interpreter = "</interpreter>"
+                start_interpreter_tokenids = self.tokenizer.encode(start_interpreter)
+                end_interpreter_tokenids = self.tokenizer.encode(end_interpreter)
+                # import pdb;pdb.set_trace()     
+                if args.exe_code_actionmask:           
+                    sequences, attention_mask, action_mask =  self.actor.process_sequences_codemask(
+                        sequences, max_input_len, eos_token_id, pad_token_id,start_interpreter_tokenids,end_interpreter_tokenids,self.tokenizer
+                    )
+                else:
+                    sequences, attention_mask, action_mask = self.actor.process_sequences(
+                        sequences, max_input_len, eos_token_id, pad_token_id
+                    )
+
                 sequences = sequences.to("cuda")
                 attention_mask = attention_mask.to("cuda")
                 action_mask = action_mask.to("cuda")

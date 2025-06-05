@@ -73,7 +73,7 @@ fi
 
 
 # /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/lanxiaohan/anaconda3/envs/mm-eureka/bin/ray start --head  --port=$RAY_MASTER_PORT --dashboard-host=0.0.0.0 --dashboard-port=$RAY_DASHBOARD_PORT --num-gpus 8
-
+batch_size=64
 echo "Sleeping for 30 seconds..."
 RAY_ADDRESS="http://127.0.0.1:$RAY_DASHBOARD_PORT" ray job submit \
   --working-dir $WORKING_DIR \
@@ -90,18 +90,18 @@ RAY_ADDRESS="http://127.0.0.1:$RAY_DASHBOARD_PORT" ray job submit \
   --pretrain ${MODEL_PATH} \
   --save_path ${OUTPUT_DIR} \
   --micro_train_batch_size 2 \
-  --train_batch_size 128 \
+  --train_batch_size $batch_size \
   --micro_rollout_batch_size 2 \
-  --rollout_batch_size 128 \
+  --rollout_batch_size $batch_size \
   --temperature 1.0 \
   --n_samples_per_prompt 8 \
   --lambd 1.0 \
   --gamma 1.0 \
   --max_epochs 1 \
   --num_episodes 10 \
-  --prompt_max_len 5000 \
+  --prompt_max_len 3000 \
   --max_samples 100000 \
-  --generate_max_len 8192 \
+  --generate_max_len 4096 \
   --advantage_estimator group_norm \
   --zero_stage 3 \
   --bf16 \
@@ -113,7 +113,7 @@ RAY_ADDRESS="http://127.0.0.1:$RAY_DASHBOARD_PORT" ray job submit \
   --adam_offload \
   --flash_attn \
   --gradient_checkpointing \
-  --save_steps 50 \
+  --save_steps 10 \
   --ckpt_path "${OUTPUT_DIR}/ckpt" \
   --max_ckpt_num 1 \
   --enable_accuracy_filter \

@@ -3,8 +3,8 @@ type = ml-vision
 
 [resource]
 usergroup = hadoop-basecv
-#queue = root.hldy_training_cluster.hadoop-aipnlp.o_exp
-queue = root.hldy_training_cluster.hadoop-aipnlp.h800_eval_debug
+queue = root.hldy_training_cluster.hadoop-aipnlp.o_exp
+#queue = root.hldy_training_cluster.hadoop-aipnlp.h800_eval_debug
 #queue = root.hldy_training_cluster.hadoop-aipnlp.p_exp
 #queue = root.hldy_training_cluster.hadoop-aipnlp.h800_mm_debug
 [roles]
@@ -13,26 +13,10 @@ worker.memory = 800000
 worker.vcore = 80
 worker.gcoresh800-80g = 8
 worker.ports = 1
-#worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v000.sh
-#worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v000_64.sh
-#worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v0.sh
+worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v0.sh
 #worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v00.sh
 #worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v1.sh
-#worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v1_1.sh
-#worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v2_1.sh
-#worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v2_0.sh
-#worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v3_0.sh
-#worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v3_1.sh
-#worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v4_0.sh
-#worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v4_1.sh
-#worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v5_0.sh
-#worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v6_0.sh
-#worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v7_0.sh
-#worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v7_00.sh
-#worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v7_2.sh
-#worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v8_2.sh
-#worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v8_1.sh
-worker.script = sh /mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA/scripts/mm_retool/retool_run_v8_3.sh
+
 
 [user_args]
 

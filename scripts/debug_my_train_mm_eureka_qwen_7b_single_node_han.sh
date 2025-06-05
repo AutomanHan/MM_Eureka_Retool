@@ -19,12 +19,16 @@ conda activate mm-eureka-hl
 
 # eval "$('/mnt/dolphinfs/hdd_pool/docker/user/hadoop-mlm/yanfeng/software/anaconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
 # conda activate mm-r
-model_tag=qwenvl_7b_instruct_multinode_K12_onlinefilter_Episode10_0421_singlenode_lff_debug_
+model_tag=qwenvl_7b_instruct_multinode_K12_onlinefilter_Episode10_0421_singlenode_debug_han
 MODEL_PATH='/mnt/dolphinfs/ssd_pool/docker/user/hadoop-basecv/qiuhaibo/workspace/weights/huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct'
 MODEL_PATH='/mnt/dolphinfs/ssd_pool/docker/user/hadoop-basecv-hl/hadoop-basecv/user/lanxiaohan/Qwen/Qwen2.5-VL-7B-Instruct'
 MODEL_PATH="/mnt/dolphinfs/ssd_pool/docker/user/hadoop-basecv-hl/hadoop-basecv/lanxiaohan/qwenvl25_outputs_code/qwen25vl_retool_full_sft_mm_code_15k_v3_1x8_3e/full/sft/checkpoint-500/"
+MODEL_PATH=/mnt/dolphinfs/hdd_pool/docker/user/hadoop-hldy-nlp/VLIT/hancong11/models/reasoning/mm_tool_ckpt/qwen25vl_retool_full_sft_mm_code_2k_v3_hl_1x8_5e_lxh/
+# MODEL_PATH='/mnt/dolphinfs/ssd_pool/docker/user/hadoop-basecv-hl/hadoop-basecv/user/lanxiaohan/Qwen/Qwen2.5-VL-7B-Instruct'
 DATA_PATH='/mnt/dolphinfs/ssd_pool/docker/user/hadoop-basecv/qiuhaibo/workspace/weights/huggingface.co/datasets/FanqingM/MM-Eureka-Dataset/dataset_k12_filtered_for_qwen_instruct.jsonl'
 DATA_PATH='/mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/data/Data_Mine/MM_ReTool/RL_mmeureka_data_qhb/dataset_k12_filtered_retoolprompt_for_qwen_instruct.jsonl'
+# DATA_PATH=/mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/data/Data_Mine/MM_ReTool/RL_mmeureka_data_qhb/dataset_k12_filtered_retoolprompt2_for_qwen_instruct.jsonl
+DATA_PATH=/mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/data/Data_Mine/MM_ReTool/RL_mmeureka_data_qhb/dataset_k12_filtered_retoolprompt3_for_qwen_instruct.jsonl
 OUTPUT_DIR=/mnt/dolphinfs/hdd_pool/docker/user/hadoop-hldy-nlp/VLIT/hancong11/models/reasoning/$model_tag
 EXP_ROOT=/mnt/dolphinfs/hdd_pool/docker/user/hadoop-basecv/hancong/code/pretrain/reasoning/code/MM-EUREKA
 cd $EXP_ROOT
@@ -81,7 +85,7 @@ export TOKENIZERS_PARALLELISM=false
 python3 -m openrlhf.cli.train_ppo_ray \
 --ref_num_nodes 1 \
 --ref_num_gpus_per_node 1 \
---remote_rm_url examples/scripts/reward_func_qwen_instruct.py \
+--remote_rm_url examples/scripts/reward_func_qwen_instruct_retool_3.py \
 --actor_num_nodes 1 \
 --actor_num_gpus_per_node 1 \
 --vllm_num_engines 1 \
@@ -127,6 +131,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
 --use_tensorboard "${OUTPUT_DIR}/tensorboard" \
 --exe_code \
 --ray_debug \
+--exe_code_actionmask \
 --load_checkpoint | tee ${OUTPUT_DIR}/training.log 
 # --exe_code
 #fi
