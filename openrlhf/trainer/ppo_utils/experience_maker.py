@@ -200,9 +200,10 @@ class NaiveExperienceMaker(ABC):
             batch_vllm_engine_call(self.vllm_engines, "wake_up")
             torch.distributed.barrier()
             torch.cuda.synchronize()
-
+        # print("ruby debug: before generate_samples", all_labels, all_prompts)
         # generate responses
         if self.strategy.ring_attn_group is not None:
+            # print("ruby debug: ring_attn_group is not None")
             # Only rank 0 in the ring attention group executes the generation function, and then broadcasts it to all other ranks.
             if self.strategy.ring_attn_rank == 0:
                 samples_list = self.generate_samples(all_prompts, all_labels, **generate_kwargs)
@@ -216,8 +217,12 @@ class NaiveExperienceMaker(ABC):
                     samples_list, src=self.strategy.ring_attn_ranks[0], group=self.strategy.ring_attn_group
                 )
         else:
+            # print("ruby debug: generate_samples 1", all_prompts, all_labels)
             samples_list = self.generate_samples(all_prompts, all_labels, **generate_kwargs)
+            # print(f"ruby debug samples_list len 1: {len(samples_list)}, all_prompts: {all_prompts}, all_labels: {all_labels}")
 
+        # print rank and the detailed of samples_list:
+        # print(f"ruby debug samples_list len: {len(samples_list)}")
         # vLLM offload when vllm_enable_sleep
         if self.strategy.args.vllm_enable_sleep:
             batch_vllm_engine_call(self.vllm_engines, "sleep")
@@ -231,11 +236,13 @@ class NaiveExperienceMaker(ABC):
             desc="make_experience",
             disable=not self.strategy.is_rank_0(),
         ):
-            experiences.append(self.make_experience(samples).to_device("cpu"))
+            experiences.append(self.make_experience(samples, global_step).to_device("cpu"))
+        # print(f"ruby debug experiences len: {len(experiences)}, experiences: {experiences}")
         # import pdb;pdb.set_trace()
         accuracy_rewards_total = sum(e.info["accuracy_rewards"].sum() for e in experiences)
         accuracy_rewards_count = sum(e.info["accuracy_rewards"].numel() for e in experiences)
         accuracy_rewards_original = accuracy_rewards_total / accuracy_rewards_count
+        # accuracy_rewards_original = accuracy_rewards_total / accuracy_rewards_count
 
         if args.enable_accuracy_filter and global_step > args.freezing_filter_steps:
             experiences = self.filter(experiences)
@@ -315,7 +322,10 @@ class NaiveExperienceMaker(ABC):
                     visual_inputs[k] = v
 
             labels = all_labels[i : i + args.micro_rollout_batch_size]
+            # print("ruby debug: before actor generate 2", prompts, labels)
             sequences, attention_mask, action_mask = self.actor.generate(**inputs, **generate_kwargs)
+            # print("ruby debug: after actor generate 2", sequences)
+            
             self.response_length_list.extend(attention_mask.float().sum(dim=-1).tolist())
             samples = Samples(
                 sequences=sequences,
@@ -334,7 +344,7 @@ class NaiveExperienceMaker(ABC):
         return samples_list
 
     @torch.no_grad()
-    def make_experience(self, samples: Samples) -> Experience:
+    def make_experience(self, samples: Samples, global_step=None) -> Experience:
         """
         Turn samples into experience by calculating logprobs, values, rewards, and kl divergence.
         """
@@ -375,7 +385,7 @@ class NaiveExperienceMaker(ABC):
             # remote RM
             queries = self.tokenizer.batch_decode(sequences.cpu(), skip_special_tokens=False)
             if self.custom_reward_func:
-                r = self.custom_reward_func(queries, samples.prompts, samples.labels).to(
+                r = self.custom_reward_func(queries, samples.prompts, samples.labels, global_step).to(
                     device=action_log_probs.device
                 )
             else:
@@ -649,7 +659,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
         return samples
 
     @torch.no_grad()
-    def make_experience(self, samples: Samples) -> Experience:
+    def make_experience(self, samples: Samples, global_step=None) -> Experience:
         """
         Turn samples into experience by calculating logprobs, values, rewards, and kl divergence.
         """
@@ -739,7 +749,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                 queries = self.tokenizer.batch_decode(sequences_list, skip_special_tokens=False)
 
             if self.custom_reward_func:
-                r = self.custom_reward_func.remote(queries, samples.prompts, samples.labels)
+                r = self.custom_reward_func.remote(queries, samples.prompts, samples.labels, global_step)
                 r_refs.append(r)
             else:
                 for rm in self.remote_rm_url:
@@ -869,12 +879,14 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
         # round-robin load balance
         rank = torch.distributed.get_rank() // self.strategy.ring_attn_size
         world_size = torch.distributed.get_world_size() // self.strategy.ring_attn_size
+        # # print(f"ruby: rank: {rank}, world_size: {world_size}, ring_attn_size: {self.strategy.ring_attn_size}')
 
         # Select LLM engines: assign each rank an engine, or cycle through engines if world_size < engine_count
         if len(self.vllm_engines) <= world_size:
             llms = [self.vllm_engines[rank % len(self.vllm_engines)]]
         else:
             llms = self.vllm_engines[rank::world_size]
+        # # print(f"ruby: {len(self.vllm_engines)} llms: {llms} ')
 
         args = self.strategy.args
         
@@ -932,6 +944,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
         for i, llm in enumerate(llms):
             all_output_refs.append(llm.get_responses.remote(rank))
         all_outputs = sum(ray.get(all_output_refs), [])
+        # # print(f"ruby all_outputs: {len(all_outputs)}', all_outputs[0])
 
         samples_list = []
         for i in range(0, len(all_outputs), args.micro_rollout_batch_size):
@@ -1064,6 +1077,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                         pad_len=pad_len,
                     )
                 )
+        # # print("ruby, return samples_list:', len(samples_list))
         return samples_list
 
     def flush(self):

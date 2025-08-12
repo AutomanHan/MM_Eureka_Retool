@@ -1,0 +1,9 @@
+.git/
+*.log
+**/out*
+**/data/raw/
+**/Qwen*
+**/*.pth
+**/*.safetensors
+**/*.json
+**/*.log

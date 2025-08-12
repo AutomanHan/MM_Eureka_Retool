@@ -93,11 +93,11 @@ class LLMRayActor:
                 if len(sampling_params.stop)==0:
                     responses = self.llm.generate(requests, sampling_params=sampling_params)
                 else:
-                    responses = self.generate_code_exec_batch(request, sampling_params)
+                    responses = self.generate_code_exec_batch(requests, sampling_params)
                     # responses=self.generate_code_exec(request, sampling_params)
             else:
                 responses = []
-            
+
             offset = 0
             self.responses = {}
             for actor_rank, num in num_requests:
@@ -112,7 +112,8 @@ class LLMRayActor:
         Return the responses for the actor with the given rank
         """
         return self.response_queues[actor_rank].get()
-    def update_response(self,new_response, fini_response,code_res):
+
+    def update_response(self,new_response, fini_response, code_res):
         old_response_text = fini_response.outputs[0].text
         fini_response.outputs[0].text += code_res + new_response.outputs[0].text
         tmp_tokenizer = self.llm.get_tokenizer()
@@ -127,8 +128,14 @@ class LLMRayActor:
         end_interpreter = "</interpreter>"
         code_res_list = code_res.split(strat_interpreter)
         precode_res = code_res_list[0]
-        midcode_res, endcode_res = code_res_list[-1].split(end_interpreter)
-
+        # RUBY FIXED
+        split_result = code_res_list[-1].split(end_interpreter, 1)  # 只分割一次
+        if len(split_result) == 2:
+            midcode_res, endcode_res = split_result
+        else:
+            # 处理没有 end_interpreter 或有多个 end_interpreter 的情况
+            midcode_res = split_result[0]
+            endcode_res = ""
         code_res_lst = [precode_res,strat_interpreter,midcode_res,end_interpreter,endcode_res]
         code_res_tokenids = []
         for tmp in code_res_lst:
@@ -143,7 +150,7 @@ class LLMRayActor:
         executor = PythonExecutor()
         responses=self.llm.generate(requests, sampling_params=sampling_params)
         final_responses = copy.deepcopy(responses)
-        
+
         pred_stop_reason_lst = [response.outputs[0].stop_reason for response in responses]
         first_time = True
         max_code_exec_times = 5
@@ -162,7 +169,7 @@ class LLMRayActor:
                 if pred_stop_reason_lst[idx_res] is not None: # 最近的输出中有代码
                     response = responses[idx_res]
                     response_text = response.outputs[0].text
-                    
+
                     code_to_execute = response_text.replace("</code>","").split("```python")[-1].replace("```", "").strip()
 
                     tmp_tokenizer = self.llm.get_tokenizer()
@@ -187,7 +194,7 @@ class LLMRayActor:
             batch_execu_res_txt = []
             assert len(new_requests) == len(code_to_execute_lst), f"length new_requests:{len(new_requests)} not equal to length code_to_execute_lst: {len(code_to_execute_lst)}"
             prompt_length_skip=[]
-            
+
             for idx_code in range(len(code_to_execute_lst)):
                 if idx_code in no_code_idx:
                     batch_results_include_none.append(None)
@@ -209,10 +216,10 @@ class LLMRayActor:
                 prompt_tokenids_len = len(tmp_tokenizer.encode(new_requests[idx_code]["prompt"]))
                 max_model_len_llm = self.llm.llm_engine.model_config.max_model_len
                 if prompt_tokenids_len >= max_model_len_llm: # 理论上只有第一次可能会发生，即一次generate后长度过长无法进行第二次generate
-                    logger.info("text info: %r, length ress %d, length prompt %d, max_model_len: %d, ", 
-                                    new_requests[idx_code]["prompt"], 
+                    logger.info("text info: %r, length ress %d, length prompt %d, max_model_len: %d, ",
+                                    new_requests[idx_code]["prompt"],
                                     tmp_code_res_ids_length,
-                                    prompt_tokenids_len, 
+                                    prompt_tokenids_len,
                                     max_model_len_llm)
                 #     prompt_length_skip.append(idx_code)
                 #     import pdb;pdb.set_trace()
@@ -220,7 +227,7 @@ class LLMRayActor:
 
             #每一轮后，new_requests中请求的数量都会减少，只对有代码生成的部分继续进行推理
             # sampling_params_new = copy.deepcopy(sampling_params)
-            
+
             new_responses = self.llm.generate(new_requests, sampling_params=sampling_params)
             tmp_new_res_cnt = 0
             for idx, stop_reason in enumerate(pred_stop_reason_lst):
@@ -234,7 +241,7 @@ class LLMRayActor:
                     pred_stop_reason_lst[idx] = tmp_response.outputs[0].stop_reason # 更新stop_reason状态
 
                     tmp_fini_response = final_responses[idx]
-                    #TODO 用新的输出更新原有输出  
+                    #TODO 用新的输出更新原有输出
                     #0528 TODO 将代码执行结果加入
                     final_responses[idx],prompt_over_length = self.update_response(tmp_response, tmp_fini_response,tmp_exec_text)
                     # 更新stop_reason
@@ -244,7 +251,7 @@ class LLMRayActor:
                     #更新原有response和request
                     responses[idx] = tmp_response
                     requests[idx] = new_requests[tmp_new_res_cnt-1]
-            
+
         return final_responses
     def generate_code_exec(self, request, sampling_params):
         """
@@ -330,15 +337,15 @@ class LLMRayActor:
                     inter_responses_tmp.outputs[0].text = tmp_text
                     tmp_token_ids = self.llm.get_tokenizer().encode(tmp_text)
                     inter_responses_tmp.outputs[0].token_ids = tmp_token_ids
-                    
+
                     max_model_len_llm = self.llm.llm_engine.model_config.max_model_len
                     prompt_token_ids = self.llm.get_tokenizer().encode(inter_response["prompt"])
                     if len(prompt_token_ids) > max_model_len_llm:
                         intermediate_responses[i] = None
                         # logger.info(f"text info: {inter_response['prompt']}, length {len(prompt_token_ids)}, max_model_len: {max_model_len_llm}")
-                        logger.info("text info: %r, length %d, max_model_len: %d", 
-                                    inter_response['prompt'], 
-                                    len(prompt_token_ids), 
+                        logger.info("text info: %r, length %d, max_model_len: %d",
+                                    inter_response['prompt'],
+                                    len(prompt_token_ids),
                                     max_model_len_llm)
 
                     # import pdb;pdb.set_trace()
@@ -351,8 +358,8 @@ class LLMRayActor:
                         inter_responses_tmp.outputs[0].token_ids = tmp_token_ids
                         tmp_text=self.llm.get_tokenizer().decode(tmp_token_ids)
                         inter_responses_tmp.outputs[0].text = tmp_text
-                    '''    
-                   
+                    '''
+
                 intermediate_responses_to_gen = [
                     inter_response
                     for inter_response in intermediate_responses

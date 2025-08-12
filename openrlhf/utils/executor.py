@@ -95,6 +95,9 @@ class PythonExecutor:
     ):
         try:
             if get_answer_from_stdout:
+                for i, line in enumerate(code):
+                    if line.isidentifier():
+                        code[i] = f"print({line})"
                 program_io = io.StringIO()
                 with redirect_stdout(program_io):
                     timeout(timeout_length)(runtime.exec_code)("\n".join(code))
