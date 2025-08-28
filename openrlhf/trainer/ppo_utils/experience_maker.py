@@ -311,7 +311,6 @@ class NaiveExperienceMaker(ABC):
         all_prompts = sum([[prompt] * args.n_samples_per_prompt for prompt in all_prompts], [])
         all_labels = sum([[label] * args.n_samples_per_prompt for label in all_labels], [])
         samples_list = []
-        # import pdb;pdb.set_trace()
         for i in range(0, len(all_prompts), args.micro_rollout_batch_size):
             prompts = all_prompts[i : i + args.micro_rollout_batch_size]
 
@@ -476,6 +475,33 @@ class NaiveExperienceMaker(ABC):
         args = self.strategy.args
         rewards = torch.cat([experience.info["reward"] for experience in experiences])
         rewards = rewards.reshape(-1, args.n_samples_per_prompt).to(device="cuda")
+        if args.code_penalty_group:
+            code_rewards = torch.cat([experience.info["code_rewards"] for experience in experiences])
+            code_rewards = code_rewards.reshape(-1, args.n_samples_per_prompt).to(device="cuda")
+            accuracy_rewards = torch.cat([experience.info["accuracy_rewards"] for experience in experiences])
+            accuracy_rewards = accuracy_rewards.reshape(-1, args.n_samples_per_prompt).to(device="cuda")
+            
+            epsilon = 1e-6
+            condition_mask = (accuracy_rewards > epsilon) & (code_rewards <= epsilon)
+            # 检查每行是否存在至少一个 condition_mask 为 True 的位置
+            row_has_condition = condition_mask.any(dim=1, keepdim=True)
+            # 找出 accuracy>0 且 code>0 的位置（需要惩罚的位置）
+            penalty_mask = (accuracy_rewards > epsilon) & (code_rewards > epsilon)
+            # 方法1：创建惩罚因子 tensor，初始值为 0.0
+            penalty_factor = torch.zeros_like(accuracy_rewards)
+            if len(penalty_mask.nonzero()) > 0:
+                code_penaltys = torch.cat([experience.info["code_penalty"] for experience in experiences])
+                code_penaltys = code_penaltys.reshape(-1, args.n_samples_per_prompt).to(device="cuda")
+            else:
+                code_penaltys = torch.ones_like(accuracy_rewards) *0.6
+            # import pdb;pdb.set_trace()
+            penalty_factor[row_has_condition & penalty_mask] = code_penaltys[row_has_condition & penalty_mask]
+
+            rewards = rewards - penalty_factor
+            # import pdb; pdb.set_trace()
+            # format_rewards = torch.cat([experience.info["format_rewards"] for experience in experiences])
+            # format_rewards = format_rewards.reshape(-1, args.n_samples_per_prompt).to(device="cuda")
+
         if args.use_adora:
             response_lengths = torch.cat([experience.info["response_length"] for experience in experiences])
             response_lengths = response_lengths.reshape(-1, args.n_samples_per_prompt).to(device="cuda")
@@ -747,7 +773,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                     sequences_list.append(tokens_list[offset : offset + length])
                     offset += length
                 queries = self.tokenizer.batch_decode(sequences_list, skip_special_tokens=False)
-
+            # import pdb;pdb.set_trace()
             if self.custom_reward_func:
                 r = self.custom_reward_func.remote(queries, samples.prompts, samples.labels, global_step)
                 r_refs.append(r)
@@ -755,7 +781,6 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                 for rm in self.remote_rm_url:
                     r = remote_rm_fn_ray.remote(rm, queries=queries, prompts=samples.prompts, labels=samples.labels)
                     r_refs.append(r)
-
         if args.colocate_all_models and not self.remote_rm_url:
             ray.get(r_refs)
             ray.get([self.reward_model[0].empty_cache.remote()])
@@ -790,7 +815,6 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                 for k in r.keys():
                     r[k] = r[k].to(device)
                 specific_rewards.update(r)
-
         r = self.reward_fn(total_rewards) if len(total_rewards) > 0 else total_rewards[0]
 
         # avoid CUDA OOM when colocate models

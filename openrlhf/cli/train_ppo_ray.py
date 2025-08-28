@@ -442,6 +442,7 @@ if __name__ == "__main__":
     parser.add_argument("--exe_code", action="store_true", default=False)
     parser.add_argument("--ray_debug",action="store_true", default=False)
     parser.add_argument("--exe_code_actionmask", action="store_true", default=False)
+    parser.add_argument("--code_penalty_group", action="store_true", default=False)
 
     args = parser.parse_args()
 
