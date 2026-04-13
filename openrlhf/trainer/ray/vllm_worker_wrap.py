@@ -1,6 +1,11 @@
 import torch
-from vllm.worker.worker import Worker
-
+try:
+    from vllm.worker.worker import Worker
+except:
+    # Worker=None
+    # 如果导入失败，则定义一个简单的基类（或使用 object）
+    class Worker:
+        pass
 from openrlhf.utils.distributed_util import init_process_group
 from openrlhf.utils.logging_utils import init_logger
 from .utils import get_physical_gpu_id

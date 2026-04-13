@@ -244,8 +244,9 @@ class PPOTrainer(ABC):
                 desc=f"Episode [{episode + 1}/{args.num_episodes}]",
                 disable=not self.strategy.is_rank_0(),
             )
-            
+            # import pdb;pdb.set_trace()
             for rand_prompts, labels in self.prompts_dataloader:
+                # import pdb;pdb.set_trace()
                 experiences, accuracy_rewards_original = self.experience_maker.make_experience_list(
                     rand_prompts, labels, steps, **self.generate_kwargs
                 )
@@ -331,6 +332,7 @@ class PPOTrainer(ABC):
 
         status_list = []
         status_mean = {}
+        # import pdb;pdb.set_trace()
         for epoch in range(self.max_epochs):
             pbar = tqdm(
                 dataloader,
@@ -422,7 +424,7 @@ class PPOTrainer(ABC):
             visual_inputs = experience.visual_inputs
             if self.args.use_kl_loss and experience.base_action_log_probs is not None:
                 base_action_log_probs = experience.base_action_log_probs
-
+        # import pdb; pdb.set_trace()
         # actor loss
         action_log_probs, output = self.actor(
             sequences,

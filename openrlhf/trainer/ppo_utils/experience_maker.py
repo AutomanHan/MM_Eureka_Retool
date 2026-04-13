@@ -4,6 +4,7 @@ from collections import Counter
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple, Union
+import os
 
 import ray
 import torch
@@ -257,6 +258,7 @@ class NaiveExperienceMaker(ABC):
             experience = experience.to_device("cuda")
             reward = reward.to(device="cuda")
             num_actions = experience.info["num_actions"]
+            
             reward = compute_reward(
                 reward,
                 self.kl_ctl.value,
@@ -319,7 +321,7 @@ class NaiveExperienceMaker(ABC):
             for k, v in inputs.items():
                 if k not in ["input_ids", "attention_mask"]:
                     visual_inputs[k] = v
-
+            
             labels = all_labels[i : i + args.micro_rollout_batch_size]
             # print("ruby debug: before actor generate 2", prompts, labels)
             sequences, attention_mask, action_mask = self.actor.generate(**inputs, **generate_kwargs)
@@ -343,7 +345,7 @@ class NaiveExperienceMaker(ABC):
         return samples_list
 
     @torch.no_grad()
-    def make_experience(self, samples: Samples, global_step=None) -> Experience:
+    def make_experience(self, samples: Samples, global_step=None, args=None) -> Experience:
         """
         Turn samples into experience by calculating logprobs, values, rewards, and kl divergence.
         """
@@ -384,7 +386,9 @@ class NaiveExperienceMaker(ABC):
             # remote RM
             queries = self.tokenizer.batch_decode(sequences.cpu(), skip_special_tokens=False)
             if self.custom_reward_func:
-                r = self.custom_reward_func(queries, samples.prompts, samples.labels, global_step).to(
+                if args is not None:
+                    reward_log = os.path.join(args.save_path, "reward.log")
+                r = self.custom_reward_func(queries, samples.prompts, samples.labels, global_step, reward_log).to(
                     device=action_log_probs.device
                 )
             else:
@@ -482,25 +486,64 @@ class NaiveExperienceMaker(ABC):
             accuracy_rewards = accuracy_rewards.reshape(-1, args.n_samples_per_prompt).to(device="cuda")
             
             epsilon = 1e-6
-            condition_mask = (accuracy_rewards > epsilon) & (code_rewards <= epsilon)
-            # 检查每行是否存在至少一个 condition_mask 为 True 的位置
-            row_has_condition = condition_mask.any(dim=1, keepdim=True)
-            # 找出 accuracy>0 且 code>0 的位置（需要惩罚的位置）
-            penalty_mask = (accuracy_rewards > epsilon) & (code_rewards > epsilon)
-            # 方法1：创建惩罚因子 tensor，初始值为 0.0
-            penalty_factor = torch.zeros_like(accuracy_rewards)
-            if len(penalty_mask.nonzero()) > 0:
-                code_penaltys = torch.cat([experience.info["code_penalty"] for experience in experiences])
-                code_penaltys = code_penaltys.reshape(-1, args.n_samples_per_prompt).to(device="cuda")
-            else:
-                code_penaltys = torch.ones_like(accuracy_rewards) *0.6
-            # import pdb;pdb.set_trace()
-            penalty_factor[row_has_condition & penalty_mask] = code_penaltys[row_has_condition & penalty_mask]
+            # nocode_acc_condition_mask 不使用code 且做题正确
+            acc_reward_mask = accuracy_rewards > epsilon
+            nocode_reward_mask = code_rewards <= epsilon
+            code_reward_mask = code_rewards > epsilon
+            # 找出 accuracy>0 且 code>0 的位置（需要惩罚的位置）；使用code且做题正确
+            penalty_mask = acc_reward_mask & code_reward_mask
+            # if penalty_mask.any() :  #这个会要求有依赖code作对才会进这个惩罚，会放松对做错且未调用code的放纵
+            if code_reward_mask.any() :
+                penalty_factor = torch.zeros_like(accuracy_rewards)
+                code_penaltys = code_rewards
+                if args.code_penalty_patial > 0:
+                    # acc_reward>0 且使用code的部分
+                    row_acc_code_reward = penalty_mask.sum(dim = -1)
+                    row_acc_reward = acc_reward_mask.sum(dim = -1)
+                    part_usecode_acc_reward = row_acc_code_reward / row_acc_reward
+                    row_has_condition_ = part_usecode_acc_reward < args.code_penalty_patial
+                    
+                    if args.code_penalty_patial_high < 1.0:
+                        row_has_condition_high = part_usecode_acc_reward > args.code_penalty_patial_high
+                        row_has_condition_ = row_has_condition_ | row_has_condition_high
+                        if args.code_penalty_right_patial_coffe > -1.0:
+                            case_code_right_high = row_has_condition_high[:,None] & penalty_mask
+                            code_penaltys[case_code_right_high] = code_penaltys[case_code_right_high] * args.code_penalty_right_patial_coffe
+                    # 设置最小正确数量，小于该值，不做惩罚,是在鼓励调用code，适用用于要求acc>0鼓励调用code
+                    if args.code_penalty_patial_min_acc_num > 0:
+                        row_has_condition_min_acc_num = row_acc_reward >= args.code_penalty_patial_min_acc_num
+                        row_has_condition_ = row_has_condition_ & row_has_condition_min_acc_num
+                    penalty_mask_final = row_has_condition_[:,None] & penalty_mask
 
-            rewards = rewards - penalty_factor
-            # import pdb; pdb.set_trace()
-            # format_rewards = torch.cat([experience.info["format_rewards"] for experience in experiences])
-            # format_rewards = format_rewards.reshape(-1, args.n_samples_per_prompt).to(device="cuda")
+                    if args.code_penalty_wrong_patial_low > 0.0:
+                        # 做错的题目
+                        wrong_acc_reward_mask = accuracy_rewards <= epsilon
+                        # 使用code 且做错的题目
+                        wrong_acc_code_mask = wrong_acc_reward_mask & code_reward_mask
+                        wrong_acc_code_mask_sum = wrong_acc_code_mask.sum(dim=-1)
+                        wrong_acc_reward_mask_sum = wrong_acc_reward_mask.sum(dim=-1)
+                        part_wrong_acc_reward = wrong_acc_code_mask_sum / wrong_acc_reward_mask_sum
+                        row_wrong_acc_code_low_contition = part_wrong_acc_reward < args.code_penalty_wrong_patial_low
+                        row_wrong_acc_code_high_contition = part_wrong_acc_reward > args.code_penalty_wrong_patial_high
+                        if args.code_penalty_wrong_patial_coffe > -1.0 and row_wrong_acc_code_high_contition.any():
+                            # import pdb;pdb.set_trace()
+                            case_code_wrong_high = row_wrong_acc_code_high_contition[:,None] & wrong_acc_code_mask
+                            code_penaltys[case_code_wrong_high] = code_penaltys[case_code_wrong_high] * args.code_penalty_wrong_patial_coffe
+                        row_wrong_acc_code_codition = row_wrong_acc_code_low_contition | row_wrong_acc_code_high_contition
+                        
+                        wrong_penalty_mask = row_wrong_acc_code_codition[:,None] & wrong_acc_code_mask
+                        penalty_mask_final = penalty_mask_final | wrong_penalty_mask
+                        
+                    penalty_factor[penalty_mask_final] = code_penaltys[penalty_mask_final]
+                else:
+                    nocode_acc_condition_mask = acc_reward_mask & nocode_reward_mask
+                    # 检查每行是否存在至少一个 condition_mask 为 True 的位置
+                    row_has_condition = nocode_acc_condition_mask.any(dim=1, keepdim=True)
+                    penalty_mask_final = row_has_condition & penalty_mask
+                    penalty_factor[penalty_mask_final] = code_penaltys[penalty_mask_final]
+                # import pdb;pdb.set_trace()
+
+                rewards = rewards - penalty_factor
 
         if args.use_adora:
             response_lengths = torch.cat([experience.info["response_length"] for experience in experiences])
@@ -657,6 +700,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                 "actor_value_rm_time": 0,
                 "wait_time": 0,
             }
+
         experiences, accuracy_rewards_original = super().make_experience_list(
             all_prompts, all_labels, global_step, **generate_kwargs
         )
@@ -775,7 +819,9 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                 queries = self.tokenizer.batch_decode(sequences_list, skip_special_tokens=False)
             # import pdb;pdb.set_trace()
             if self.custom_reward_func:
-                r = self.custom_reward_func.remote(queries, samples.prompts, samples.labels, global_step)
+                if args is not None:
+                    reward_log = os.path.join(args.save_path, "reward.log")
+                r = self.custom_reward_func.remote(queries, samples.prompts, samples.labels, global_step,reward_log)
                 r_refs.append(r)
             else:
                 for rm in self.remote_rm_url:

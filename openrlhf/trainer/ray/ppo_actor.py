@@ -144,7 +144,7 @@ class ActorPPOTrainer(PPOTrainer):
 
         if self.strategy.args.colocate_all_models:
             torch.distributed.barrier()
-
+        
         # 3. actor model training
         if global_steps > self.freezing_actor_steps:
             if self.strategy.args.deepspeed_enable_sleep:

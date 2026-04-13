@@ -321,7 +321,7 @@ if __name__ == "__main__":
     parser.add_argument("--save_value_network", action="store_true", default=False, help="Save critic model")
     parser.add_argument("--actor_learning_rate", type=float, default=1e-6)
     parser.add_argument("--critic_learning_rate", type=float, default=9e-6)
-    parser.add_argument("--lr_warmup_ratio", type=float, default=0.03)
+    parser.add_argument("--lr_warmup_ratio", type=float, default=0.01)
     parser.add_argument("--kl_target", type=float, default=None)
     parser.add_argument("--init_kl_coef", type=float, default=0.01, help="KL penalty in PPO")
     parser.add_argument(
@@ -443,6 +443,13 @@ if __name__ == "__main__":
     parser.add_argument("--ray_debug",action="store_true", default=False)
     parser.add_argument("--exe_code_actionmask", action="store_true", default=False)
     parser.add_argument("--code_penalty_group", action="store_true", default=False)
+    parser.add_argument("--code_penalty_patial", type=float, default=0.0)
+    parser.add_argument("--code_penalty_patial_high", type=float, default=0.0)
+    parser.add_argument("--code_penalty_wrong_patial_low", type=float, default=0.0)
+    parser.add_argument("--code_penalty_wrong_patial_high", type=float, default=1.0)
+    parser.add_argument("--code_penalty_patial_min_acc_num", type=int, default=0)
+    parser.add_argument("--code_penalty_wrong_patial_coffe", type=float, default=-1.0)
+    parser.add_argument("--code_penalty_right_patial_coffe", type=float, default=-1.0)
 
     args = parser.parse_args()
 

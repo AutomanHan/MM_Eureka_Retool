@@ -2,6 +2,7 @@ import os
 import queue
 from collections import defaultdict
 from typing import Any, List
+from packaging import version
 
 import ray
 from ray.util.placement_group import placement_group
@@ -153,7 +154,7 @@ class LLMRayActor:
 
         pred_stop_reason_lst = [response.outputs[0].stop_reason for response in responses]
         first_time = True
-        max_code_exec_times = 5
+        max_code_exec_times = 3
         code_exec_times = 0
         while (first_time or any(
             [
@@ -404,7 +405,7 @@ def create_vllm_engines(
 ):
     import vllm
 
-    assert vllm.__version__ >= "0.7.2", "OpenRLHF only supports vllm >= 0.7.2"
+    assert version.parse(vllm.__version__) >= version.parse("0.7.2"), "OpenRLHF only supports vllm >= 0.7.2"
 
     vllm_engines = []
 

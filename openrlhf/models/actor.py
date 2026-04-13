@@ -228,7 +228,7 @@ class Actor(nn.Module):
         #
         eos_indices = seq_length - attention_mask.long().fliplr().argmax(dim=1, keepdim=True).clamp(min=1)
         sequences.scatter_(dim=1, index=eos_indices, value=eos_token_id)
-
+        
         # For Llama3 and Qwen2 models, there are some eos_tokens in the middle of the prompt.
         first_token_indices = attention_mask.long().argmax(dim=1, keepdim=True)
         mask = torch.arange(seq_length).unsqueeze(0).expand(sequences.size(0), -1).to(device=sequences.device)

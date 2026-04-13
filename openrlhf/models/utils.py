@@ -61,7 +61,7 @@ def compute_reward(
 
     if reward_clip_range:
         r = r.clamp(min=reward_clip_range[0], max=reward_clip_range[1])
-
+    # import pdb;pdb.set_trace()
     if action_mask is not None:
         kl_reward = -kl_coef * kl
         # The following code is equivalent to:
@@ -75,6 +75,7 @@ def compute_reward(
         #
         eos_indices = action_mask.size(1) - 1 - action_mask.long().fliplr().argmax(dim=1, keepdim=True)
         last_reward = torch.zeros_like(kl).scatter_(dim=1, index=eos_indices, src=r.unsqueeze(1).to(kl.dtype))
+        # import pdb;pdb.set_trace()
 
         reward = last_reward + kl_reward
     else:
